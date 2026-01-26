@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Monitor ADB</title>
+  <style>
+    body {
+      background: #0e0e0e;
+      color: #00ff99;
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    .card {
+      background: #111;
+      padding: 20px;
+      border-radius: 10px;
+      width: 300px;
+      box-shadow: 0 0 10px #00ff9940;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📡 Monitor do Dispositivo</h1>
+
+  <div class="card">
+    <p>🔋 Bateria: <span id="battery">--</span></p>
+    <p>🌐 IP: <span id="ip">--</span></p>
+    <p>⏱ Última atualização:</p>
+    <p id="lastUpdate">--</p>
+  </div>
+
+  <!-- Firebase -->
+  <script type="module" src="firebase.js"></script>
+
+</body>
+</html>
