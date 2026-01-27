@@ -1,0 +1,117 @@
+/* =========================
+   VARIÁVEIS DE CORES
+========================= */
+:root {
+  --bg-main: #000000;
+  --bg-card: #020202;
+
+  --color-primary: #ffffff;
+  --color-secondary: #00cc66;
+  --color-border: #00ff88;
+
+  --text-main: #00ff88;
+  --text-muted: #00cc66;
+}
+
+
+
+/* =========================
+   BASE
+========================= */
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  font-family: Consolas, monospace;
+  padding: 20px;
+}
+
+
+.logo {
+  height: 40px;
+  display: block;
+  padding-bottom: 2%;
+  margin: 0 auto 10px auto; /* centraliza + espaço embaixo */
+}
+
+
+h1 {
+  color: var(--color-primary);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+/* =========================
+   CONTAINER DE CARDS
+========================= */
+#devices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* =========================
+   CARD DO DEVICE
+========================= */
+.device {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 14px;
+  background-color: var(--bg-card);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.device:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 0 18px rgba(0, 255, 136, 0.35);
+}
+
+/* =========================
+   TÍTULO DO CARD
+========================= */
+.device h2 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: var(--color-primary);
+  border-bottom: 1px dashed var(--color-border);
+  padding-bottom: 6px;
+}
+
+/* =========================
+   TEXTO DO CARD
+========================= */
+.device p {
+  margin: 6px 0;
+  font-size: 14px;
+}
+
+.label {
+  color: var(--text-muted);
+}
+
+.battery {
+  font-weight: bold;
+}
+
+.battery-high {
+  color: #00ff88;
+}
+
+.battery-medium {
+  color: #ffcc00;
+}
+
+.battery-low {
+  color: #ff4444;
+}
+
+.battery-unknown {
+  color: #888;
+}
+
+.timestamp {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
