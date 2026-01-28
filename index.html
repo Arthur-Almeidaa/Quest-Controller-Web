@@ -3,17 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <title>QuestController</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <link rel="stylesheet" href="style.css">
   <link rel="shortcut icon" href="faviiocon.png" type="image/x-icon">
-  <img src="logo.png" alt="logo" class="logo">
- 
 </head>
+
 <body>
 
+  <!-- HEADER -->
+  <header class="header">
+    <img src="logo.png" alt="QuestController Logo" class="logo">
+    <h1>QuestController</h1>
+  </header>
 
-  <div id="devices">Aguardando dados...</div>
+  
 
-  <!-- JS separado -->
+  <!-- CONTEÚDO -->
+  <main>
+    <div id="devices">
+      <div class="loading">Aguardando dados...</div>
+    </div>
+  </main>
+
+  <div id="groupsTab" class="tab-content">
+  <div class="action-bar">
+    <a href="painel.html" class="btn btn-primary">
+      <span></span> version
+    </a>
+  </div>
+</div>
+      
+
+  <!-- JS -->
   <script type="module" src="script.js"></script>
 
 </body>
