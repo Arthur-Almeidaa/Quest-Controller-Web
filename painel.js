@@ -30,10 +30,12 @@ let pendingCommands = new Map();
 ========================= */
 const COMMAND_TIMEOUT = 10000;
 const APPS_INFO = {
-  'beatsaber': { name: 'Beat Saber', icon: '🎵' },
-  'blaston': { name: 'Blaston', icon: '🔫' },
-  'hyperdash': { name: 'Hyper Dash', icon: '⚡' },
-  'chrome': { name: 'Chrome', icon: '🌐' }
+  beatsaber:   { name: 'Beat Saber', icon: '🎵' },
+  blaston:     { name: 'Blaston', icon: '🔫' },
+  hyperdash:   { name: 'Hyper Dash', icon: '⚡' },
+  creed:       { name: 'Creed', icon: '🥊' },
+  spatialops:  { name: 'Spatial Ops', icon: '🎯' },
+  homeinvasion:{ name: 'Home Invasion', icon: '🏠' }
 };
 
 /* =========================
