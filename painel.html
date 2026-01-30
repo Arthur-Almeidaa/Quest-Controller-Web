@@ -18,7 +18,7 @@
     <!-- HEADER -->
     <header class="header">
       <div class="header-left">
-        <div class="logo">Quest Controller</div>
+        <div class="logo">🎮 Quest Controller</div>
         <div class="logo-subtitle">Gerenciamento de Dispositivos VR</div>
       </div>
 
@@ -37,7 +37,7 @@
         </div>
         <div class="stat-item stat-logs" id="btnOpenLogs">
           <div class="stat-value">
-            
+            📋
             <span class="notification-badge" id="unreadLogsCount" style="display:none;">0</span>
           </div>
           <div class="stat-label">Logs</div>
@@ -48,9 +48,11 @@
     <!-- TABS -->
     <div class="tabs">
       <button class="tab active" data-tab="devices">
+        <span class="tab-icon">📱</span>
         <span>Dispositivos</span>
       </button>
       <button class="tab" data-tab="groups">
+        <span class="tab-icon">👥</span>
         <span>Grupos</span>
       </button>
     </div>
@@ -61,10 +63,7 @@
         <div class="action-bar-left">
           <select class="form-select" id="deviceAppSelect">
             <option value="">Selecione um App</option>
-            <option value="beatsaber">🎵 Beat Saber</option>
-            <option value="blaston">🔫 Blaston</option>
-            <option value="hyperdash">⚡ Hyper Dash</option>
-            <option value="chrome">🌐 Chrome</option>
+            <!-- Apps carregados automaticamente do Firebase -->
           </select>
           <button class="btn btn-primary" id="btnExecuteSelected">
             <span>🚀</span> Executar Selecionados
@@ -72,6 +71,12 @@
         </div>
         
         <div class="action-bar-right">
+          <button class="btn btn-success" id="btnAddApp">
+            <span>➕</span> Novo Jogo
+          </button>
+          <button class="btn btn-secondary" id="btnToggleApps">
+            <span id="toggleAppsIcon">👁️</span> <span id="toggleAppsText">Ocultar Apps</span>
+          </button>
           <button class="btn btn-secondary" id="btnSelectAll">
             <span>✓</span> Selecionar Todos
           </button>
@@ -114,10 +119,7 @@
           <label>Aplicativo Padrão</label>
           <select id="groupApp" class="form-select">
             <option value="">Nenhum</option>
-            <option value="beatsaber">🎵 Beat Saber</option>
-            <option value="blaston">🔫 Blaston</option>
-            <option value="hyperdash">⚡ Hyper Dash</option>
-            <option value="chrome">🌐 Chrome</option>
+            <!-- Apps carregados automaticamente do apps-config.js -->
           </select>
         </div>
 
@@ -131,6 +133,61 @@
         <button class="btn btn-secondary" id="btnCancelModal">Cancelar</button>
         <button class="btn btn-danger" id="btnDeleteGroup" style="display:none;">Deletar Grupo</button>
         <button class="btn btn-primary" id="btnSaveGroup">Salvar Grupo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADICIONAR/EDITAR APP -->
+  <div id="appModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="appModalTitle">➕ Adicionar Novo Jogo</h2>
+        <button class="modal-close" id="btnCloseAppModal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Nome do Jogo *</label>
+          <input type="text" id="appName" class="form-input" placeholder="Ex: SUPERHOT VR" />
+          <small style="color: var(--text-muted); font-size: 12px;">Nome que aparecerá na interface</small>
+        </div>
+
+        <div class="form-group">
+          <label>Emoji/Ícone</label>
+          <input type="text" id="appIcon" class="form-input" placeholder="🔴" maxlength="4" />
+          <small style="color: var(--text-muted); font-size: 12px;">Emoji que representa o jogo (opcional)</small>
+        </div>
+
+        <div class="form-group">
+          <label>Package Name (Android) *</label>
+          <input type="text" id="appPackage" class="form-input" placeholder="com.empresa.jogo" />
+          <small style="color: var(--text-muted); font-size: 12px;">Package name do app no Android/Quest</small>
+        </div>
+
+        <div class="form-group">
+          <label>ID Único *</label>
+          <input type="text" id="appId" class="form-input" placeholder="superhot" />
+          <small style="color: var(--text-muted); font-size: 12px;">Apenas letras minúsculas, sem espaços (ex: beatsaber)</small>
+        </div>
+
+        <div class="app-preview" id="appPreview" style="display:none;">
+          <div style="padding: 12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;">
+            <strong style="color: var(--text-secondary);">Preview:</strong>
+            <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+              <span id="previewIcon" style="font-size: 20px;">🎮</span>
+              <span id="previewName" style="color: var(--text-primary); font-weight: 500;">Nome do Jogo</span>
+            </div>
+            <div style="margin-top: 4px; font-size: 12px; color: var(--text-muted);">
+              <code id="previewPackage">com.empresa.jogo</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnCancelAppModal">Cancelar</button>
+        <button class="btn btn-danger" id="btnDeleteApp" style="display:none;">Deletar App</button>
+        <button class="btn btn-primary" id="btnSaveApp">✅ Salvar Jogo</button>
       </div>
     </div>
   </div>

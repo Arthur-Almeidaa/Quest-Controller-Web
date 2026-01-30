@@ -320,6 +320,15 @@ body {
   background: #dc2626;
 }
 
+.btn-success {
+  background: var(--color-success);
+  color: white;
+}
+
+.btn-success:hover {
+  background: #059669;
+}
+
 .btn-small {
   padding: 6px 12px;
   font-size: 12px;
@@ -446,6 +455,62 @@ body {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
+}
+
+.device-actions.hidden {
+  display: none;
+}
+
+.device-current-app {
+  margin-top: 12px;
+  padding: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.device-current-app.running {
+  border-color: var(--color-success);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.current-app-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.current-app-name {
+  color: var(--color-success);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.current-app-name.idle {
+  color: var(--text-muted);
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+  animation: blink 2s infinite;
+}
+
+.status-indicator.idle {
+  background: var(--text-muted);
+  animation: none;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 .empty-state {
@@ -673,6 +738,23 @@ body {
   color: var(--text-primary);
   font-size: 14px;
   cursor: pointer;
+}
+
+.app-preview {
+  margin-top: 16px;
+  animation: fadeIn 0.3s ease;
+}
+
+.form-group small {
+  display: block;
+  margin-top: 4px;
+}
+
+.form-group code {
+  background: var(--bg-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
 }
 
 /* =========================
