@@ -34,9 +34,10 @@ const APPS_INFO = {
   blaston:     { name: 'Blaston', icon: '🔫' },
   hyperdash:   { name: 'Hyper Dash', icon: '⚡' },
   creed:       { name: 'Creed', icon: '🥊' },
-  spatialops:  { name: 'Spatial Ops', icon: '🎯' },
+  trolin:      { name: 'Spatial Ops', icon: '🎯' },
   homeinvasion:{ name: 'Home Invasion', icon: '🏠' }
 };
+
 
 /* =========================
    FIREBASE LISTENERS
