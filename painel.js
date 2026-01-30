@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, onValue, set, update, remove, push, get } 
+import { getDatabase, ref, onValue, set, update, remove, push } 
 from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 /* =========================
@@ -20,19 +20,23 @@ const db = getDatabase(app);
 let devices = {};
 let groups = {};
 let commandLogs = {};
-let availableApps = {}; // Apps carregados do Firebase
 let selectedDevices = new Set();
 let currentEditingGroupId = null;
-let currentEditingAppId = null;
 let unreadLogsCount = 0;
 let pendingCommands = new Map();
-let showAppButtons = true;
-let statusCheckInterval = null;
 
 /* =========================
    CONSTANTES
 ========================= */
 const COMMAND_TIMEOUT = 10000;
+const APPS_INFO = {
+  beatsaber:   { name: 'Beat Saber', icon: '🎵' },
+  blaston:     { name: 'Blaston', icon: '🔫' },
+  hyperdash:   { name: 'Hyper Dash', icon: '⚡' },
+  creed:       { name: 'Creed', icon: '🥊' },
+  spatialops:  { name: 'Spatial Ops', icon: '🎯' },
+  homeinvasion:{ name: 'Home Invasion', icon: '🏠' }
+};
 
 /* =========================
    FIREBASE LISTENERS
@@ -40,6 +44,7 @@ const COMMAND_TIMEOUT = 10000;
 onValue(ref(db, "devices"), snap => {
   const devicesData = snap.val() || {};
   
+  // Processar respostas de comandos
   Object.entries(devicesData).forEach(([deviceId, deviceData]) => {
     if (deviceData.commandResponse) {
       processCommandResponse(deviceId, deviceData.commandResponse);
@@ -73,21 +78,11 @@ onValue(ref(db, "commandLogs"), snap => {
   renderLogs();
 });
 
-// ✅ NOVO: Listener para apps disponíveis
-onValue(ref(db, "availableApps"), snap => {
-  availableApps = snap.val() || {};
-  console.log(`📱 Apps carregados do Firebase: ${Object.keys(availableApps).length}`);
-  populateAppSelects();
-  renderDevices();
-});
-
 /* =========================
    INICIALIZAÇÃO
 ========================= */
 document.addEventListener('DOMContentLoaded', () => {
   initializeEventListeners();
-  initializeDefaultApps(); // Criar apps padrão se não existirem
-  startStatusPolling();
 });
 
 function initializeEventListeners() {
@@ -98,272 +93,26 @@ function initializeEventListeners() {
     });
   });
 
-  // Dispositivos
   document.getElementById('btnExecuteSelected').addEventListener('click', sendCommandToSelected);
   document.getElementById('btnSelectAll').addEventListener('click', selectAllDevices);
   document.getElementById('btnDeselectAll').addEventListener('click', deselectAllDevices);
-  document.getElementById('btnToggleApps').addEventListener('click', toggleAppButtons);
-  
-  // Apps
-  document.getElementById('btnAddApp').addEventListener('click', openAddAppModal);
-  document.getElementById('btnCloseAppModal').addEventListener('click', closeAppModal);
-  document.getElementById('btnCancelAppModal').addEventListener('click', closeAppModal);
-  document.getElementById('btnSaveApp').addEventListener('click', saveApp);
-  document.getElementById('btnDeleteApp').addEventListener('click', deleteApp);
-  
-  // Preview em tempo real
-  document.getElementById('appName').addEventListener('input', updateAppPreview);
-  document.getElementById('appIcon').addEventListener('input', updateAppPreview);
-  document.getElementById('appPackage').addEventListener('input', updateAppPreview);
-  
-  // Grupos
   document.getElementById('btnCreateGroup').addEventListener('click', openCreateGroupModal);
   document.getElementById('btnCloseModal').addEventListener('click', closeGroupModal);
   document.getElementById('btnCancelModal').addEventListener('click', closeGroupModal);
   document.getElementById('btnSaveGroup').addEventListener('click', saveGroup);
   document.getElementById('btnDeleteGroup').addEventListener('click', deleteGroup);
-  
-  // Logs
   document.getElementById('btnOpenLogs').addEventListener('click', openLogsModal);
   document.getElementById('btnCloseLogsModal').addEventListener('click', closeLogsModal);
   document.getElementById('btnClearLogs').addEventListener('click', clearLogs);
   document.getElementById('logFilterStatus').addEventListener('change', renderLogs);
   document.getElementById('logFilterDevice').addEventListener('change', renderLogs);
 
-  // Fechar modais ao clicar fora
   document.getElementById('groupModal').addEventListener('click', (e) => {
     if (e.target.id === 'groupModal') closeGroupModal();
   });
   
   document.getElementById('logsModal').addEventListener('click', (e) => {
     if (e.target.id === 'logsModal') closeLogsModal();
-  });
-  
-  document.getElementById('appModal').addEventListener('click', (e) => {
-    if (e.target.id === 'appModal') closeAppModal();
-  });
-}
-
-/* =========================
-   APPS PADRÃO
-========================= */
-async function initializeDefaultApps() {
-  // Verificar se já existem apps no Firebase
-  const appsSnapshot = await get(ref(db, "availableApps"));
-  
-  if (!appsSnapshot.exists()) {
-    console.log('📱 Criando apps padrão no Firebase...');
-    
-    const defaultApps = {
-      beatsaber: {
-        id: 'beatsaber',
-        name: 'Beat Saber',
-        icon: '🎵',
-        packageName: 'com.beatgames.beatsaber',
-        createdAt: Date.now(),
-        isDefault: true
-      },
-      blaston: {
-        id: 'blaston',
-        name: 'Blaston',
-        icon: '🔫',
-        packageName: 'com.resolution.blaston',
-        createdAt: Date.now(),
-        isDefault: true
-      },
-      hyperdash: {
-        id: 'hyperdash',
-        name: 'Hyper Dash',
-        icon: '⚡',
-        packageName: 'com.triangularpixels.hyperdash',
-        createdAt: Date.now(),
-        isDefault: true
-      },
-      chrome: {
-        id: 'chrome',
-        name: 'Chrome',
-        icon: '🌐',
-        packageName: 'com.android.chrome',
-        createdAt: Date.now(),
-        isDefault: true
-      },
-      creed: {
-        id: 'creed',
-        name: 'Creed',
-        icon: '🥊',
-        packageName: 'com.survios.creed',
-        createdAt: Date.now(),
-        isDefault: true
-      },
-      spatialops: {
-        id: 'spatialops',
-        name: 'Spatial Ops',
-        icon: '🎯',
-        packageName: 'com.downpourinteractive.spatialops',
-        createdAt: Date.now(),
-        isDefault: true
-      },
-      homeinvasion: {
-        id: 'homeinvasion',
-        name: 'Home Invasion',
-        icon: '🏠',
-        packageName: 'com.raydiant.homeinvasion',
-        createdAt: Date.now(),
-        isDefault: true
-      }
-    };
-    
-    await set(ref(db, "availableApps"), defaultApps);
-    console.log('✅ Apps padrão criados!');
-  }
-}
-
-/* =========================
-   APPS - MODAL
-========================= */
-function openAddAppModal() {
-  currentEditingAppId = null;
-  
-  document.getElementById('appModalTitle').textContent = '➕ Adicionar Novo Jogo';
-  document.getElementById('appName').value = '';
-  document.getElementById('appIcon').value = '';
-  document.getElementById('appPackage').value = '';
-  document.getElementById('appId').value = '';
-  document.getElementById('btnDeleteApp').style.display = 'none';
-  document.getElementById('appPreview').style.display = 'none';
-  
-  document.getElementById('appModal').classList.add('active');
-}
-
-function closeAppModal() {
-  document.getElementById('appModal').classList.remove('active');
-  currentEditingAppId = null;
-}
-
-function updateAppPreview() {
-  const name = document.getElementById('appName').value.trim();
-  const icon = document.getElementById('appIcon').value.trim();
-  const packageName = document.getElementById('appPackage').value.trim();
-  
-  if (name || icon || packageName) {
-    document.getElementById('appPreview').style.display = 'block';
-    document.getElementById('previewIcon').textContent = icon || '🎮';
-    document.getElementById('previewName').textContent = name || 'Nome do Jogo';
-    document.getElementById('previewPackage').textContent = packageName || 'com.empresa.jogo';
-  } else {
-    document.getElementById('appPreview').style.display = 'none';
-  }
-}
-
-function saveApp() {
-  const name = document.getElementById('appName').value.trim();
-  const icon = document.getElementById('appIcon').value.trim();
-  const packageName = document.getElementById('appPackage').value.trim();
-  const id = document.getElementById('appId').value.trim().toLowerCase();
-  
-  // Validações
-  if (!name) {
-    showToast('Digite o nome do jogo', 'error');
-    return;
-  }
-  
-  if (!packageName) {
-    showToast('Digite o package name', 'error');
-    return;
-  }
-  
-  if (!id) {
-    showToast('Digite o ID único', 'error');
-    return;
-  }
-  
-  // Validar ID (apenas letras minúsculas e números)
-  if (!/^[a-z0-9]+$/.test(id)) {
-    showToast('ID deve conter apenas letras minúsculas e números', 'error');
-    return;
-  }
-  
-  // Verificar se ID já existe (somente ao criar novo)
-  if (!currentEditingAppId && availableApps[id]) {
-    showToast('Este ID já existe! Escolha outro.', 'error');
-    return;
-  }
-  
-  const appData = {
-    id,
-    name,
-    icon: icon || '🎮',
-    packageName,
-    createdAt: currentEditingAppId ? availableApps[id].createdAt : Date.now(),
-    updatedAt: Date.now(),
-    isDefault: false
-  };
-  
-  set(ref(db, `availableApps/${id}`), appData)
-    .then(() => {
-      showToast(`✅ Jogo "${name}" ${currentEditingAppId ? 'atualizado' : 'adicionado'} com sucesso!`, 'success');
-      closeAppModal();
-    })
-    .catch(err => {
-      showToast(`Erro ao salvar jogo: ${err.message}`, 'error');
-    });
-}
-
-function deleteApp() {
-  if (!currentEditingAppId) return;
-  
-  const app = availableApps[currentEditingAppId];
-  
-  if (app.isDefault) {
-    showToast('Não é possível deletar apps padrão', 'error');
-    return;
-  }
-  
-  if (!confirm(`Tem certeza que deseja deletar "${app.name}"?\n\nIsso removerá o app de todos os dispositivos!`)) {
-    return;
-  }
-  
-  remove(ref(db, `availableApps/${currentEditingAppId}`))
-    .then(() => {
-      showToast('Jogo deletado com sucesso!', 'success');
-      closeAppModal();
-    })
-    .catch(err => {
-      showToast(`Erro ao deletar jogo: ${err.message}`, 'error');
-    });
-}
-
-/* =========================
-   APPS - UTILS
-========================= */
-function getAppInfo(appId) {
-  return availableApps[appId] || { 
-    id: appId,
-    name: appId, 
-    icon: '📱',
-    packageName: appId
-  };
-}
-
-function getAllApps() {
-  return Object.values(availableApps);
-}
-
-function populateAppSelects() {
-  const selects = ['deviceAppSelect', 'groupApp'];
-  const apps = getAllApps();
-  
-  const optionsHTML = apps
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map(app => `<option value="${app.id}">${app.icon} ${app.name}</option>`)
-    .join('');
-  
-  selects.forEach(selectId => {
-    const select = document.getElementById(selectId);
-    if (select) {
-      const firstOption = select.querySelector('option:first-child');
-      select.innerHTML = firstOption.outerHTML + optionsHTML;
-    }
   });
 }
 
@@ -386,7 +135,7 @@ function renderDevices() {
   if (Object.keys(devices).length === 0) {
     grid.innerHTML = `
       <div class="empty-state">
-        <div style="font-size: 48px; margin-bottom: 16px;">📱</div>
+        <div style="font-size: 48px; margin-bottom: 16px;"></div>
         <div>Nenhum dispositivo conectado</div>
         <div style="font-size: 14px; margin-top: 8px; opacity: 0.7;">Os dispositivos aparecerão aqui quando conectarem</div>
       </div>
@@ -405,8 +154,6 @@ function renderDevices() {
       const battery = d.battery ?? 0;
       const isSelected = selectedDevices.has(id);
       const online = isOnline(d);
-      const currentApp = d.currentApp || null;
-      const appResponding = d.appResponding || false;
 
       return `
         <div class="device-card ${isSelected ? 'selected' : ''}" onclick="toggleDevice('${id}')">
@@ -447,9 +194,7 @@ function renderDevices() {
             ` : ''}
           </div>
 
-          ${renderCurrentApp(currentApp, appResponding)}
-
-          <div class="device-actions ${showAppButtons ? '' : 'hidden'}" onclick="event.stopPropagation()">
+          <div class="device-actions" onclick="event.stopPropagation()">
             ${renderAppButtons(id, online)}
           </div>
         </div>
@@ -457,40 +202,12 @@ function renderDevices() {
     }).join("");
 }
 
-function renderCurrentApp(currentApp, appResponding) {
-  if (!currentApp) {
-    return `
-      <div class="device-current-app">
-        <span class="current-app-label">App Atual:</span>
-        <span class="current-app-name idle">
-          <span class="status-indicator idle"></span>
-          Nenhum app rodando
-        </span>
-      </div>
-    `;
-  }
-
-  const appInfo = getAppInfo(currentApp);
-  
-  return `
-    <div class="device-current-app running">
-      <span class="current-app-label">App Atual:</span>
-      <span class="current-app-name">
-        <span class="status-indicator ${appResponding ? '' : 'idle'}"></span>
-        ${appInfo.icon} ${appInfo.name}
-        ${appResponding ? '✓' : '⚠️'}
-      </span>
-    </div>
-  `;
-}
-
 function renderAppButtons(deviceId, online) {
-  const apps = getAllApps();
-  return apps.map(app => `
+  return Object.entries(APPS_INFO).map(([id, info]) => `
     <button class="btn btn-primary btn-small" 
-            onclick="sendCommand('${deviceId}','${app.id}')"
+            onclick="sendCommand('${deviceId}','${id}')"
             ${!online ? 'disabled' : ''}>
-      ${app.icon} ${app.name}
+      ${info.icon} ${info.name}
     </button>
   `).join('');
 }
@@ -521,45 +238,6 @@ function deselectAllDevices() {
   selectedDevices.clear();
   renderDevices();
   showToast('Seleção limpa', 'info');
-}
-
-function toggleAppButtons() {
-  showAppButtons = !showAppButtons;
-  
-  const icon = document.getElementById('toggleAppsIcon');
-  const text = document.getElementById('toggleAppsText');
-  
-  if (showAppButtons) {
-    icon.textContent = '👁️';
-    text.textContent = 'Ocultar Apps';
-    showToast('Botões de apps visíveis', 'info');
-  } else {
-    icon.textContent = '👁️‍🗨️';
-    text.textContent = 'Mostrar Apps';
-    showToast('Botões de apps ocultos', 'info');
-  }
-  
-  renderDevices();
-}
-
-/* =========================
-   STATUS POLLING
-========================= */
-function startStatusPolling() {
-  statusCheckInterval = setInterval(() => {
-    checkDevicesStatus();
-  }, 5000);
-}
-
-function checkDevicesStatus() {
-  Object.entries(devices).forEach(([deviceId, device]) => {
-    if (device.lastUpdate && device.status === 'online') {
-      const timeSinceUpdate = Date.now() - device.lastUpdate;
-      if (timeSinceUpdate > 60000) {
-        console.warn(`${deviceId} não atualiza há ${Math.floor(timeSinceUpdate / 1000)}s`);
-      }
-    }
-  });
 }
 
 /* =========================
@@ -663,7 +341,7 @@ function processCommandResponse(deviceId, response) {
 ========================= */
 function createCommandLog(deviceId, action, status, message, commandId = null) {
   const logId = commandId || (Date.now() + '_' + Math.random().toString(36).substr(2, 9));
-  const appInfo = getAppInfo(action);
+  const appInfo = APPS_INFO[action] || { name: action, icon: '📱' };
   
   const logData = {
     logId,
@@ -826,7 +504,7 @@ function renderGroups() {
   if (Object.keys(groups).length === 0) {
     grid.innerHTML = `
       <div class="empty-state">
-        <div style="font-size: 48px; margin-bottom: 16px;">👥</div>
+        <div style="font-size: 48px; margin-bottom: 16px;"></div>
         <div>Nenhum grupo criado</div>
         <div style="font-size: 14px; margin-top: 8px; opacity: 0.7;">Crie grupos para organizar seus dispositivos</div>
       </div>
@@ -871,6 +549,10 @@ function renderGroups() {
       </div>
     `;
   }).join("");
+}
+
+function getAppInfo(appId) {
+  return APPS_INFO[appId] || { name: 'Nenhum', icon: '📱' };
 }
 
 function openCreateGroupModal() {
