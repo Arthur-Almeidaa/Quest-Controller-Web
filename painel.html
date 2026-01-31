@@ -137,8 +137,6 @@
     </div>
   </div>
 
-  
-
   <!-- MODAL: ADICIONAR/EDITAR APP -->
   <div id="appModal" class="modal">
     <div class="modal-content">
@@ -170,6 +168,21 @@
           <label>ID Único *</label>
           <input type="text" id="appId" class="form-input" placeholder="superhot" />
           <small style="color: var(--text-muted); font-size: 12px;">Apenas letras minúsculas, sem espaços (ex: beatsaber)</small>
+        </div>
+
+        <div class="form-group">
+          <label>Tipo de Abertura</label>
+          <select id="appLaunchType" class="form-select">
+            <option value="normal">Normal (Padrão)</option>
+            <option value="special">Especial (Requer configuração no app)</option>
+          </select>
+          <small style="color: var(--text-muted); font-size: 12px;">Normal: abre via package manager | Especial: código customizado no app</small>
+        </div>
+
+        <div class="form-group" id="specialActionGroup" style="display: none;">
+          <label>Ação Especial</label>
+          <input type="text" id="appSpecialAction" class="form-input" placeholder="BEAT_SABER" />
+          <small style="color: var(--text-muted); font-size: 12px;">Nome da ação no código (ex: BEAT_SABER, BLASTON_VR)</small>
         </div>
 
         <div class="app-preview" id="appPreview" style="display:none;">
