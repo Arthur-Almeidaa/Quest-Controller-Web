@@ -405,6 +405,14 @@ function getAppInfo(appId) {
   };
 }
 
+// ⭐ NOVO: Busca app pelo packageName
+function getAppByPackageName(packageName) {
+  if (!packageName) return null;
+  
+  const app = Object.values(availableApps).find(a => a.packageName === packageName);
+  return app || null;
+}
+
 function getAllApps() {
   return Object.values(availableApps);
 }
@@ -465,6 +473,9 @@ function renderDevices() {
       const battery = d.battery ?? 0;
       const isSelected = selectedDevices.has(id);
       const online = isOnline(d);
+      
+      // ⭐ NOVO: Detectar jogo em execução
+      const currentAppInfo = getCurrentlyPlayingApp(d);
 
       return `
         <div class="device-card ${isSelected ? 'selected' : ''}" onclick="toggleDevice('${id}')">
@@ -478,6 +489,8 @@ function renderDevices() {
               ${online ? '● Online' : '○ Offline'}
             </span>
           </div>
+
+          ${renderCurrentlyPlaying(currentAppInfo)}
 
           <div class="device-info">
             <div class="info-row">
@@ -511,6 +524,49 @@ function renderDevices() {
         </div>
       `;
     }).join("");
+}
+
+// ⭐ NOVO: Detecta qual jogo está sendo jogado
+function getCurrentlyPlayingApp(device) {
+  // Tenta usar currentAppName primeiro (vem do Service)
+  if (device.currentAppName) {
+    return {
+      name: device.currentAppName,
+      packageName: device.currentApp,
+      icon: getAppByPackageName(device.currentApp)?.icon || '🎮',
+      source: 'detected' // Detectado automaticamente
+    };
+  }
+  
+  // Fallback: usa currentApp (setado manualmente via comando)
+  if (device.currentApp) {
+    const appInfo = getAppInfo(device.currentApp);
+    return {
+      name: appInfo.name,
+      packageName: appInfo.packageName,
+      icon: appInfo.icon,
+      source: 'manual' // Setado por comando
+    };
+  }
+  
+  return null;
+}
+
+// ⭐ NOVO: Renderiza badge de "Jogando agora"
+function renderCurrentlyPlaying(appInfo) {
+  if (!appInfo) return '';
+  
+  const badgeClass = appInfo.source === 'detected' ? 'now-playing-detected' : 'now-playing-manual';
+  
+  return `
+    <div class="now-playing ${badgeClass}">
+      <div class="now-playing-icon">${appInfo.icon}</div>
+      <div class="now-playing-info">
+        <div class="now-playing-label">🎮 Jogando agora</div>
+        <div class="now-playing-name">${appInfo.name}</div>
+      </div>
+    </div>
+  `;
 }
 
 function renderAppButtons(deviceId, online) {
