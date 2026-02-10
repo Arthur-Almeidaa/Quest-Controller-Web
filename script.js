@@ -72,6 +72,15 @@ function enviarComando(deviceKey, comando, btnElement) {
 }
 
 /* =========================
+   CONFIRMAR DESLIGAR
+========================= */
+function confirmarDesligar(deviceKey, btnElement) {
+  if (confirm(`🔴 Tem certeza que deseja DESLIGAR o Quest "${deviceKey}"?\n\nO dispositivo será desligado completamente.`)) {
+    enviarComando(deviceKey, 'shutdown', btnElement);
+  }
+}
+
+/* =========================
    TOGGLE BOTÕES DE APPS
 ========================= */
 function toggleApps(deviceKey) {
@@ -122,12 +131,17 @@ onValue(ref(db, "devices"), (snapshot) => {
       </p>
 
       <p><span class="label">IP:</span> ${d.ip ?? "-"}</p>
-      <p><span class="label">Último app:</span> ${d.lastApp ?? "-"}</p>
+      <p><span class="label">Último app:</span> ${d.currentApp ?? "-"}</p>
 
       <p class="timestamp">
         <span class="label">Última atualização:</span>
         ${d.lastUpdate ? new Date(d.lastUpdate).toLocaleString('pt-BR') : "-"}
       </p>
+
+      <!-- Botão de Desligar -->
+      <button class="btn-shutdown" data-device="${deviceKey}">
+        🔴 Desligar Quest
+      </button>
 
       <button class="btn-toggle" id="toggle-${deviceKey}">
         ▶ Abrir Apps
@@ -157,6 +171,15 @@ onValue(ref(db, "devices"), (snapshot) => {
     container.appendChild(div);
   });
 
+  // Event listener para botão de DESLIGAR
+  document.querySelectorAll('.btn-shutdown').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const deviceKey = this.getAttribute('data-device');
+      console.log(`🔴 Botão desligar clicado: ${deviceKey}`);
+      confirmarDesligar(deviceKey, this);
+    });
+  });
+
   // Event listeners para botão de toggle
   document.querySelectorAll('.btn-toggle').forEach(btn => {
     btn.addEventListener('click', function() {
@@ -179,3 +202,16 @@ onValue(ref(db, "devices"), (snapshot) => {
 // Log de inicialização
 console.log('🔥 Firebase inicializado');
 console.log('📡 Conectado ao banco:', firebaseConfig.databaseURL);
+
+// Adicionar app de shutdown no Firebase
+set(ref(db, "availableApps/shutdown"), {
+  id: 'shutdown',
+  name: 'Desligar Quest',
+  icon: '🔴',
+  packageName: 'system.shutdown',
+  launchType: 'special',
+  specialAction: 'SHUTDOWN',
+  createdAt: Date.now(),
+  isDefault: true,
+  isSystem: true
+});
