@@ -20,25 +20,55 @@ const db   = getDatabase(app);
 const auth = getAuth(app);
 
 /* =========================
+   ESTADO DE SESSÃO
+========================= */
+let currentUser = null;
+let userSession = null;
+
+/* =========================
    AUTH GUARD
 ========================= */
-onAuthStateChanged(auth, user => {
-  if (!user) {
-    window.location.href = "login.html";
-    return;
-  }
+// Verificar sessão de usuário comum primeiro
+const storedSession = localStorage.getItem("userSession") || sessionStorage.getItem("userSession");
 
-  // Exibe e-mail truncado no header
-  const emailEl = document.getElementById("loggedUserEmail");
-  if (emailEl) {
-    const short = user.email.split("@")[0];
-    emailEl.textContent = short.length > 12 ? short.slice(0, 12) + "…" : short;
-    emailEl.title = user.email;
+if (storedSession) {
+  try {
+    userSession = JSON.parse(storedSession);
+    if (userSession.userId && userSession.username) {
+      currentUser = {
+        type: 'user',
+        session: userSession
+      };
+      console.log("Sessão de usuário comum encontrada:", userSession);
+      initApp();
+    } else {
+      throw new Error("Sessão inválida");
+    }
+  } catch (e) {
+    console.error("Erro ao carregar sessão:", e);
+    localStorage.removeItem("userSession");
+    sessionStorage.removeItem("userSession");
+    window.location.replace("index.html");
   }
+} else {
+  // Se não tem sessão de usuário, verifica Firebase (admin)
+  onAuthStateChanged(auth, user => {
+    if (!user) {
+      if (!window.location.pathname.includes("index.html")) {
+        window.location.replace("index.html");
+      }
+      return;
+    }
 
-  // Inicia app só após autenticação confirmada
-  initApp();
-});
+    currentUser = {
+      type: 'admin',
+      firebase: user
+    };
+    console.log("Sessão de admin encontrada:", user.email);
+    initApp();
+  });
+}
+
 
 /* =========================
    ESTADO GLOBAL
@@ -64,6 +94,7 @@ const COMMAND_TIMEOUT = 10000;
 ========================= */
 function initApp() {
   document.addEventListener("DOMContentLoaded", () => {
+    updateUserDisplay();
     initializeEventListeners();
     initializeDefaultApps();
     startFirebaseListeners();
@@ -71,9 +102,29 @@ function initApp() {
 
   // Se o DOM já carregou (módulo pode rodar depois do DOMContentLoaded)
   if (document.readyState !== "loading") {
+    updateUserDisplay();
     initializeEventListeners();
     initializeDefaultApps();
     startFirebaseListeners();
+  }
+}
+
+/* =========================
+   ATUALIZAR DISPLAY DO USUÁRIO
+========================= */
+function updateUserDisplay() {
+  const loggedUserEl = document.getElementById("loggedUserEmail");
+  if (!loggedUserEl) return;
+
+  if (currentUser && currentUser.type === 'user' && userSession) {
+    // Usuário comum
+    loggedUserEl.textContent = userSession.username;
+    if (userSession.sector) {
+      loggedUserEl.title = `Setor: ${userSession.sector}`;
+    }
+  } else if (currentUser && currentUser.type === 'admin') {
+    // Admin
+    loggedUserEl.textContent = "Admin";
   }
 }
 
@@ -244,8 +295,15 @@ function initializeEventListeners() {
 ========================= */
 async function handleLogout() {
   showConfirm("Encerrar Sessão", "Tem certeza que deseja sair do painel?", async () => {
-    await signOut(auth);
-    window.location.href = "login.html";
+    if (currentUser && currentUser.type === 'admin') {
+      // Logout do Firebase
+      await signOut(auth);
+    } else {
+      // Logout de usuário comum
+      localStorage.removeItem("userSession");
+      sessionStorage.removeItem("userSession");
+    }
+    window.location.href = "index.html";
   });
 }
 
@@ -275,7 +333,25 @@ function toggleAppsVisibility() {
 function renderDevices() {
   const grid = document.getElementById("devicesGrid");
 
-  if (Object.keys(devices).length === 0) {
+  // Filtrar dispositivos baseado nas permissões do usuário
+  let filteredDevices = devices;
+  
+  if (currentUser && currentUser.type === 'user' && userSession) {
+    const allowedDevices = userSession.allowedDevices || [];
+    
+    // Se o usuário tem lista de dispositivos permitidos, filtrar
+    if (allowedDevices.length > 0) {
+      filteredDevices = Object.fromEntries(
+        Object.entries(devices).filter(([id]) => allowedDevices.includes(id))
+      );
+    }
+  }
+
+  if (Object.keys(filteredDevices).length === 0) {
+    const emptyMessage = currentUser && currentUser.type === 'user' 
+      ? "Você não tem dispositivos autorizados"
+      : "Nenhum dispositivo conectado";
+    
     grid.innerHTML = `
       <div class="empty-state">
         <svg class="empty-icon" viewBox="0 0 48 48" fill="none">
@@ -284,13 +360,13 @@ function renderDevices() {
           <circle cx="34" cy="26" r="3" stroke="currentColor" stroke-width="2"/>
           <path d="M24 22v8M20 26h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
-        <div class="empty-title">Nenhum dispositivo conectado</div>
+        <div class="empty-title">${emptyMessage}</div>
         <div class="empty-sub">Os dispositivos aparecerão aqui quando se conectarem</div>
       </div>`;
     return;
   }
 
-  grid.innerHTML = Object.entries(devices)
+  grid.innerHTML = Object.entries(filteredDevices)
     .sort(([, a], [, b]) => (isOnline(b) ? 1 : 0) - (isOnline(a) ? 1 : 0))
     .map(([id, d]) => {
       const battery    = d.battery ?? 0;
@@ -969,8 +1045,20 @@ document.addEventListener("DOMContentLoaded", () => {
    STATS
 ========================= */
 function updateStats() {
-  document.getElementById("totalDevices").textContent = Object.keys(devices).length;
-  document.getElementById("onlineDevices").textContent = Object.values(devices).filter(isOnline).length;
+  // Filtrar dispositivos baseado nas permissões do usuário
+  let filteredDevices = devices;
+  
+  if (currentUser && currentUser.type === 'user' && userSession) {
+    const allowedDevices = userSession.allowedDevices || [];
+    if (allowedDevices.length > 0) {
+      filteredDevices = Object.fromEntries(
+        Object.entries(devices).filter(([id]) => allowedDevices.includes(id))
+      );
+    }
+  }
+
+  document.getElementById("totalDevices").textContent = Object.keys(filteredDevices).length;
+  document.getElementById("onlineDevices").textContent = Object.values(filteredDevices).filter(isOnline).length;
   document.getElementById("totalGroups").textContent   = Object.keys(groups).length;
 }
 

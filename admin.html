@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quest Controller – Admin Panel</title>
+  <link rel="shortcut icon" href="icon.png" type="image/x-icon">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="painel.css">
+</head>
+
+<body>
+  <div class="container">
+
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo">
+          <svg class="logo-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="7" width="20" height="10" rx="3" stroke="currentColor" stroke-width="1.5"/>
+            <circle cx="8" cy="12" r="1.5" fill="currentColor"/>
+            <circle cx="16" cy="12" r="1.5" fill="currentColor"/>
+            <line x1="12" y1="10" x2="12" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="10" y1="12" x2="14" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Quest Controller
+        </div>
+        <div class="logo-subtitle">Painel Administrativo</div>
+      </div>
+
+      <div class="stats">
+        <div class="stat-item">
+          <div class="stat-value" id="totalDevices">0</div>
+          <div class="stat-label">Dispositivos</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="totalUsers">0</div>
+          <div class="stat-label">Usuários</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="totalSectors">0</div>
+          <div class="stat-label">Setores</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="totalGroups">0</div>
+          <div class="stat-label">Grupos</div>
+        </div>
+        <div class="stat-item stat-action" id="btnLogout" title="Sair da sessão">
+          <div class="stat-value stat-icon-value">
+            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M13 3h4a1 1 0 011 1v12a1 1 0 01-1 1h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M9 14l4-4-4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="3" y1="10" x2="13" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="stat-label" id="loggedUserEmail">Sair</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab active" data-tab="devices">
+        <svg class="tab-svg" viewBox="0 0 18 18" fill="none">
+          <rect x="1" y="5" width="16" height="8" rx="2" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="5.5" cy="9" r="1" fill="currentColor"/>
+          <circle cx="12.5" cy="9" r="1" fill="currentColor"/>
+          <path d="M9 8v2m-1-1h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        <span>Dispositivos</span>
+      </button>
+      <button class="tab" data-tab="users">
+        <svg class="tab-svg" viewBox="0 0 18 18" fill="none">
+          <path d="M9 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M2 16c0-3.3 2.7-6 6-6h2c3.3 0 6 2.7 6 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <span>Usuários</span>
+      </button>
+      <button class="tab" data-tab="sectors">
+        <svg class="tab-svg" viewBox="0 0 18 18" fill="none">
+          <rect x="2" y="2" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.4"/>
+          <rect x="10" y="2" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.4"/>
+          <rect x="2" y="10" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.4"/>
+          <rect x="10" y="10" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.4"/>
+        </svg>
+        <span>Setores</span>
+      </button>
+      <button class="tab" data-tab="groups">
+        <svg class="tab-svg" viewBox="0 0 18 18" fill="none">
+          <circle cx="6" cy="7" r="2.5" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="12" cy="7" r="2.5" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M1 16c0-2.8 2.2-5 5-5h6c2.8 0 5 2.2 5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <span>Grupos</span>
+      </button>
+    </div>
+
+    <!-- DEVICES TAB -->
+    <div id="devicesTab" class="tab-content active">
+      <div class="action-bar">
+        <div class="action-bar-left">
+          <select class="form-select" id="deviceAppSelect">
+            <option value="">Selecionar Aplicativo</option>
+          </select>
+          <button class="btn btn-primary" id="btnExecuteSelected">
+            <svg viewBox="0 0 16 16" fill="none"><path d="M4 2l10 6-10 6V2z" fill="currentColor"/></svg>
+            Executar Selecionados
+          </button>
+        </div>
+        <div class="action-bar-right">
+          <button class="btn btn-success" id="btnAddApp">
+            <svg viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            Novo Aplicativo
+          </button>
+          <button class="btn btn-secondary" id="btnSelectAll">
+            <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M5 8l2.5 2.5L11 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Selecionar Todos
+          </button>
+        </div>
+      </div>
+      <div id="devicesGrid" class="devices-grid"></div>
+    </div>
+
+    <!-- USERS TAB -->
+    <div id="usersTab" class="tab-content">
+      <div class="action-bar">
+        <div class="action-bar-left">
+          <button class="btn btn-primary" id="btnCreateUser">
+            <svg viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            Criar Novo Usuário
+          </button>
+        </div>
+        <div class="action-bar-right">
+          <select class="form-select" id="filterSector">
+            <option value="">Todos os Setores</option>
+          </select>
+          <input type="text" id="searchUsers" class="form-input" placeholder="Buscar usuários..." style="min-width: 250px;">
+        </div>
+      </div>
+      <div id="usersGrid" class="devices-grid"></div>
+    </div>
+
+    <!-- SECTORS TAB -->
+    <div id="sectorsTab" class="tab-content">
+      <div class="action-bar">
+        <div class="action-bar-left">
+          <button class="btn btn-primary" id="btnCreateSector">
+            <svg viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            Criar Novo Setor
+          </button>
+        </div>
+      </div>
+      <div id="sectorsGrid" class="groups-grid"></div>
+    </div>
+
+    <!-- GROUPS TAB -->
+    <div id="groupsTab" class="tab-content">
+      <div class="action-bar">
+        <button class="btn btn-primary" id="btnCreateGroup">
+          <svg viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Criar Novo Grupo
+        </button>
+      </div>
+      <div id="groupsGrid" class="groups-grid"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: CRIAR/EDITAR USUÁRIO -->
+  <div id="userModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="userModalTitle">Criar Novo Usuário</h2>
+        <button class="modal-close" id="btnCloseUserModal" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Nome de Usuário <span class="required">*</span></label>
+          <input type="text" id="userName" class="form-input" placeholder="Ex: joao" />
+          <small class="form-hint">Apenas letras minúsculas e números, sem espaços</small>
+        </div>
+        <div class="form-group">
+          <label>Senha <span class="required">*</span></label>
+          <input type="password" id="userPassword" class="form-input" placeholder="••••••••" />
+          <small class="form-hint">Mínimo 4 caracteres</small>
+        </div>
+        <div class="form-group">
+          <label>Setor</label>
+          <select id="userSector" class="form-select">
+            <option value="">Sem setor</option>
+          </select>
+          <small class="form-hint">Selecione o setor do usuário</small>
+        </div>
+        <div class="form-group">
+          <label>Dispositivos Permitidos <span class="required">*</span></label>
+          <div id="userDevicesList" class="devices-checklist"></div>
+          <small class="form-hint">Selecione quais dispositivos este usuário pode acessar</small>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="userActive" class="checkbox-input" checked />
+            <span class="checkbox-text">Usuário ativo</span>
+          </label>
+          <small class="form-hint">Desmarque para desativar o acesso sem excluir o usuário</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnCancelUserModal">Cancelar</button>
+        <button class="btn btn-danger" id="btnDeleteUser" style="display:none;">Excluir Usuário</button>
+        <button class="btn btn-primary" id="btnSaveUser">Salvar Usuário</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CRIAR/EDITAR SETOR -->
+  <div id="sectorModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="sectorModalTitle">Criar Novo Setor</h2>
+        <button class="modal-close" id="btnCloseSectorModal" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Nome do Setor <span class="required">*</span></label>
+          <input type="text" id="sectorName" class="form-input" placeholder="Ex: Sala 1, Laboratório A" />
+          <small class="form-hint">Nome descritivo do setor</small>
+        </div>
+        <div class="form-group">
+          <label>Descrição</label>
+          <textarea id="sectorDescription" class="form-input" rows="3" placeholder="Descrição opcional do setor"></textarea>
+          <small class="form-hint">Informações adicionais sobre o setor</small>
+        </div>
+        <div class="form-group">
+          <label>Cor de Identificação</label>
+          <div class="color-picker-grid">
+            <label class="color-option">
+              <input type="radio" name="sectorColor" value="#3b82f6" checked />
+              <span class="color-box" style="background: #3b82f6;"></span>
+            </label>
+            <label class="color-option">
+              <input type="radio" name="sectorColor" value="#10b981" />
+              <span class="color-box" style="background: #10b981;"></span>
+            </label>
+            <label class="color-option">
+              <input type="radio" name="sectorColor" value="#f59e0b" />
+              <span class="color-box" style="background: #f59e0b;"></span>
+            </label>
+            <label class="color-option">
+              <input type="radio" name="sectorColor" value="#ef4444" />
+              <span class="color-box" style="background: #ef4444;"></span>
+            </label>
+            <label class="color-option">
+              <input type="radio" name="sectorColor" value="#8b5cf6" />
+              <span class="color-box" style="background: #8b5cf6;"></span>
+            </label>
+            <label class="color-option">
+              <input type="radio" name="sectorColor" value="#ec4899" />
+              <span class="color-box" style="background: #ec4899;"></span>
+            </label>
+          </div>
+          <small class="form-hint">Escolha uma cor para identificar visualmente o setor</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnCancelSectorModal">Cancelar</button>
+        <button class="btn btn-danger" id="btnDeleteSector" style="display:none;">Excluir Setor</button>
+        <button class="btn btn-primary" id="btnSaveSector">Salvar Setor</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CRIAR/EDITAR GRUPO -->
+  <div id="groupModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">Criar Novo Grupo</h2>
+        <button class="modal-close" id="btnCloseModal" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Nome do Grupo</label>
+          <input type="text" id="groupName" class="form-input" placeholder="Ex: Sala de Aula 1" />
+        </div>
+        <div class="form-group">
+          <label>Aplicativo Padrão</label>
+          <select id="groupApp" class="form-select">
+            <option value="">Nenhum</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Dispositivos no Grupo</label>
+          <div id="devicesList" class="devices-checklist"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnCancelModal">Cancelar</button>
+        <button class="btn btn-danger" id="btnDeleteGroup" style="display:none;">Remover Grupo</button>
+        <button class="btn btn-primary" id="btnSaveGroup">Salvar Grupo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADICIONAR/EDITAR APP -->
+  <div id="appModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="appModalTitle">Adicionar Aplicativo</h2>
+        <button class="modal-close" id="btnCloseAppModal" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Nome do Aplicativo <span class="required">*</span></label>
+          <input type="text" id="appName" class="form-input" placeholder="Ex: SUPERHOT VR" />
+          <small class="form-hint">Nome exibido na interface</small>
+        </div>
+        <div class="form-group">
+          <label>Identificador Visual</label>
+          <input type="text" id="appIcon" class="form-input" placeholder="Sigla ou ícone (opcional)" maxlength="4" />
+          <small class="form-hint">Abreviação curta exibida no card do app</small>
+        </div>
+        <div class="form-group">
+          <label>Package Name (Android) <span class="required">*</span></label>
+          <input type="text" id="appPackage" class="form-input" placeholder="com.empresa.aplicativo" />
+          <small class="form-hint">Identificador do pacote Android/Quest</small>
+        </div>
+        <div class="form-group">
+          <label>ID Único <span class="required">*</span></label>
+          <input type="text" id="appId" class="form-input" placeholder="superhot" />
+          <small class="form-hint">Apenas letras minúsculas e números, sem espaços</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnCancelAppModal">Cancelar</button>
+        <button class="btn btn-danger" id="btnDeleteApp" style="display:none;">Remover App</button>
+        <button class="btn btn-primary" id="btnSaveApp">Salvar Aplicativo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CONFIRMAÇÃO -->
+  <div id="confirmModal" class="modal">
+    <div class="modal-content modal-confirm">
+      <div class="modal-header">
+        <h2 id="confirmTitle">Confirmar Ação</h2>
+        <button class="modal-close" id="btnCloseConfirm" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirmMessage" style="color: var(--text-secondary); font-size: 15px; line-height: 1.6;"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnConfirmCancel">Cancelar</button>
+        <button class="btn btn-danger" id="btnConfirmOk">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- JS -->
+  <script type="module" src="admin.js"></script>
+</body>
+</html>

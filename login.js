@@ -11,7 +11,8 @@ import {
 import {
   getDatabase,
   ref,
-  onValue
+  onValue,
+  get
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 /* =========================
@@ -27,13 +28,41 @@ const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getDatabase(app);
 
+// Lista de emails admin
+const ADMIN_EMAILS = [
+  "admincontroller@gmail.com",
+  "questcontroller.br@gmail.com"
+];
+
 /* =========================
    VERIFICAR SE JÁ ESTÁ LOGADO
 ========================= */
-onAuthStateChanged(auth, user => {
+// Verifica sessão de usuário comum
+const userSession = localStorage.getItem("userSession") || sessionStorage.getItem("userSession");
+if (userSession) {
+  try {
+    const session = JSON.parse(userSession);
+    if (session.userId && session.username) {
+      console.log("Sessão de usuário encontrada, redirecionando...");
+      window.location.href = "painel.html";
+    }
+  } catch (e) {
+    console.error("Erro ao ler sessão:", e);
+    localStorage.removeItem("userSession");
+    sessionStorage.removeItem("userSession");
+  }
+}
+
+// Verifica sessão de admin (Firebase)
+onAuthStateChanged(auth, async user => {
   if (user) {
-    // Já autenticado – vai direto ao painel
-    window.location.href = "painel.html";
+    // Verifica se é admin
+    if (ADMIN_EMAILS.includes(user.email)) {
+      window.location.href = "admin.html";
+    } else {
+      // Se não é admin, desloga do Firebase
+      await signOut(auth);
+    }
   }
 });
 
@@ -134,7 +163,7 @@ function animateNumber(elementId, target) {
    FORMULÁRIO DE LOGIN
 ========================= */
 const loginForm    = document.getElementById("loginForm");
-const emailInput   = document.getElementById("email");
+const usernameInput = document.getElementById("username");
 const passwordInput = document.getElementById("password");
 const rememberMe   = document.getElementById("rememberMe");
 const btnLogin     = document.getElementById("btnLogin");
@@ -145,17 +174,13 @@ loginForm.addEventListener("submit", async e => {
   e.preventDefault();
   clearErrors();
 
-  const email    = emailInput.value.trim();
+  const username = usernameInput.value.trim();
   const password = passwordInput.value;
   let valid = true;
 
-  if (!email) {
-    showFieldError("emailError", "Digite seu e-mail");
-    emailInput.classList.add("input-error");
-    valid = false;
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    showFieldError("emailError", "E-mail inválido");
-    emailInput.classList.add("input-error");
+  if (!username) {
+    showFieldError("usernameError", "Digite seu usuário ou e-mail");
+    usernameInput.classList.add("input-error");
     valid = false;
   }
 
@@ -170,19 +195,84 @@ loginForm.addEventListener("submit", async e => {
   setLoading(true);
 
   try {
-    const persistence = rememberMe.checked
-      ? browserLocalPersistence
-      : browserSessionPersistence;
+    // Verifica se é um email (admin) ou username (user comum)
+    const isEmail = username.includes("@");
 
-    await setPersistence(auth, persistence);
-    await signInWithEmailAndPassword(auth, email, password);
+    if (isEmail) {
+      // Login com email (para admins)
+      const persistence = rememberMe.checked
+        ? browserLocalPersistence
+        : browserSessionPersistence;
 
-    showAlert("alertSuccess", null, true);
-    // onAuthStateChanged vai redirecionar automaticamente
+      await setPersistence(auth, persistence);
+      await signInWithEmailAndPassword(auth, username, password);
+
+      showAlert("alertSuccess", null, true);
+      // onAuthStateChanged vai redirecionar automaticamente
+
+    } else {
+      // Login com username (para users)
+      const usersRef = ref(db, "users");
+      const snapshot = await get(usersRef);
+      
+      if (!snapshot.exists()) {
+        throw new Error("user-not-found");
+      }
+
+      const users = snapshot.val();
+      const userEntry = Object.entries(users).find(([id, user]) => 
+        user.username === username
+      );
+
+      if (!userEntry) {
+        throw new Error("user-not-found");
+      }
+
+      const [userId, userData] = userEntry;
+
+      // Verifica senha (em produção, use hash!)
+      if (userData.password !== password) {
+        throw new Error("wrong-password");
+      }
+
+      if (!userData.active) {
+        throw new Error("user-disabled");
+      }
+
+      // Armazena sessão do usuário
+      const userSession = {
+        userId: userId,
+        username: userData.username,
+        sector: userData.sector || "",
+        allowedDevices: userData.allowedDevices || [],
+        isAdmin: false,
+        loginTime: Date.now()
+      };
+
+      const sessionData = JSON.stringify(userSession);
+
+      if (rememberMe.checked) {
+        localStorage.setItem("userSession", sessionData);
+        sessionStorage.removeItem("userSession");
+      } else {
+        sessionStorage.setItem("userSession", sessionData);
+        localStorage.removeItem("userSession");
+      }
+
+      console.log("Sessão criada com sucesso:", userSession);
+
+      showAlert("alertSuccess", null, true);
+      
+      // Aguarda um pouco e redireciona
+      setTimeout(() => {
+        window.location.href = "painel.html";
+      }, 800);
+    }
 
   } catch (err) {
     setLoading(false);
-    showAlert("alertError", friendlyError(err.code));
+    const errorCode = err.code || err.message;
+    showAlert("alertError", friendlyError(errorCode));
   }
 });
 
@@ -216,7 +306,7 @@ btnTogglePassword.addEventListener("click", () => {
    MODAL: ESQUECI A SENHA
 ========================= */
 document.getElementById("btnForgot").addEventListener("click", () => {
-  document.getElementById("forgotEmail").value = emailInput.value;
+  document.getElementById("forgotEmail").value = usernameInput.value;
   document.getElementById("forgotAlert").style.display = "none";
   document.getElementById("forgotModal").classList.add("active");
 });
@@ -236,7 +326,12 @@ document.getElementById("btnSendReset").addEventListener("click", async () => {
   const alertEl = document.getElementById("forgotAlert");
 
   if (!email) {
-    showInlineAlert(alertEl, "error", "Digite seu e-mail.");
+    showInlineAlert(alertEl, "error", "Digite seu e-mail de administrador.");
+    return;
+  }
+
+  if (!email.includes("@")) {
+    showInlineAlert(alertEl, "error", "Recuperação de senha disponível apenas para administradores. Contate o suporte.");
     return;
   }
 
@@ -269,9 +364,9 @@ function showFieldError(id, message) {
 }
 
 function clearErrors() {
-  document.getElementById("emailError").textContent    = "";
+  document.getElementById("usernameError").textContent    = "";
   document.getElementById("passwordError").textContent = "";
-  emailInput.classList.remove("input-error");
+  usernameInput.classList.remove("input-error");
   passwordInput.classList.remove("input-error");
   document.getElementById("alertError").style.display   = "none";
   document.getElementById("alertSuccess").style.display = "none";
@@ -294,21 +389,24 @@ function showInlineAlert(el, type, message) {
 
 function friendlyError(code) {
   const messages = {
-    "auth/user-not-found":     "Nenhuma conta encontrada com este e-mail.",
-    "auth/wrong-password":     "Senha incorreta. Tente novamente.",
-    "auth/invalid-email":      "O e-mail informado é inválido.",
+    "auth/user-not-found":     "Nenhuma conta encontrada.",
+    "auth/wrong-password":     "Senha incorreta.",
+    "auth/invalid-email":      "E-mail inválido.",
     "auth/user-disabled":      "Esta conta foi desativada.",
     "auth/too-many-requests":  "Muitas tentativas. Aguarde alguns minutos.",
     "auth/network-request-failed": "Erro de conexão. Verifique sua internet.",
-    "auth/invalid-credential": "E-mail ou senha incorretos.",
+    "auth/invalid-credential": "Usuário ou senha incorretos.",
+    "user-not-found":          "Usuário não encontrado.",
+    "wrong-password":          "Senha incorreta.",
+    "user-disabled":           "Usuário desativado. Contate o administrador.",
   };
   return messages[code] || "Erro inesperado. Tente novamente.";
 }
 
 /* Limpa erro ao digitar */
-emailInput.addEventListener("input",    () => {
-  emailInput.classList.remove("input-error");
-  document.getElementById("emailError").textContent = "";
+usernameInput.addEventListener("input", () => {
+  usernameInput.classList.remove("input-error");
+  document.getElementById("usernameError").textContent = "";
 });
 passwordInput.addEventListener("input", () => {
   passwordInput.classList.remove("input-error");
