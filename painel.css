@@ -173,6 +173,20 @@ body {
   gap: 8px;
 }
 
+/* =========================
+   CONTROLE GLOBAL DE SVG
+========================= */
+svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.icon-sm { width: 16px; height: 16px; }
+.icon-md { width: 20px; height: 20px; }
+.icon-lg { width: 28px; height: 28px; }
+
+
 .tab:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
