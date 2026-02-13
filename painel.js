@@ -6,9 +6,6 @@ import {
   getAuth, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-/* =========================
-   FIREBASE CONFIG
-========================= */
 const firebaseConfig = {
   apiKey: "AIzaSyDAkapYFpjsugAn5lFq8e5pXHdecn75Ej8",
   databaseURL: "https://teste-f579d-default-rtdb.firebaseio.com",
@@ -19,39 +16,26 @@ const app  = initializeApp(firebaseConfig);
 const db   = getDatabase(app);
 const auth = getAuth(app);
 
-/* =========================
-   ESTADO DE SESSÃO
-========================= */
 let currentUser = null;
 let userSession = null;
 
-/* =========================
-   AUTH GUARD
-========================= */
-// Verificar sessão de usuário comum primeiro
 const storedSession = localStorage.getItem("userSession") || sessionStorage.getItem("userSession");
 
 if (storedSession) {
   try {
     userSession = JSON.parse(storedSession);
     if (userSession.userId && userSession.username) {
-      currentUser = {
-        type: 'user',
-        session: userSession
-      };
-      console.log("Sessão de usuário comum encontrada:", userSession);
+      currentUser = { type: 'user', session: userSession };
       initApp();
     } else {
       throw new Error("Sessão inválida");
     }
   } catch (e) {
-    console.error("Erro ao carregar sessão:", e);
     localStorage.removeItem("userSession");
     sessionStorage.removeItem("userSession");
     window.location.replace("index.html");
   }
 } else {
-  // Se não tem sessão de usuário, verifica Firebase (admin)
   onAuthStateChanged(auth, user => {
     if (!user) {
       if (!window.location.pathname.includes("index.html")) {
@@ -59,35 +43,70 @@ if (storedSession) {
       }
       return;
     }
-
-    currentUser = {
-      type: 'admin',
-      firebase: user
-    };
-    console.log("Sessão de admin encontrada:", user.email);
+    currentUser = { type: 'admin', firebase: user };
     initApp();
   });
 }
 
-
 /* =========================
    ESTADO GLOBAL
 ========================= */
-let devices        = {};
-let groups         = {};
-let commandLogs    = {};
-let availableApps  = {};
+let devices         = {};
+let groups          = {};
+let commandLogs     = {};
+let availableApps   = {};
 let selectedDevices = new Set();
 let currentEditingGroupId = null;
 let currentEditingAppId   = null;
 let unreadLogsCount = 0;
 let pendingCommands = new Map();
 let appsVisible     = true;
+let batteryAlerted  = new Set(); // controla quais devices já tocaram o alerta
+
+const COMMAND_TIMEOUT       = 10000;
+const BATTERY_ALERT_THRESHOLD = 20;
 
 /* =========================
-   CONSTANTES
+   ALERTA SONORO DE BATERIA
 ========================= */
-const COMMAND_TIMEOUT = 10000;
+function playBatteryAlert() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.35, 0.7].forEach(delay => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(880, ctx.currentTime + delay);
+      osc.frequency.setValueAtTime(660, ctx.currentTime + delay + 0.1);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.25);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.25);
+    });
+  } catch (e) {
+    console.warn('Audio nao disponivel:', e);
+  }
+}
+
+function checkBatteryAlerts(devicesData) {
+  Object.entries(devicesData).forEach(([deviceId, device]) => {
+    if (!isOnline(device)) return;
+    const battery = device.battery ?? 100;
+
+    if (battery <= BATTERY_ALERT_THRESHOLD && !batteryAlerted.has(deviceId)) {
+      batteryAlerted.add(deviceId);
+      playBatteryAlert();
+      showToast(`🔋 ${deviceId} com bateria baixa! ${battery}%`, 'error');
+    }
+
+    // Se carregou acima de 25%, reseta para poder alertar de novo
+    if (battery > BATTERY_ALERT_THRESHOLD + 5) {
+      batteryAlerted.delete(deviceId);
+    }
+  });
+}
 
 /* =========================
    INICIALIZAÇÃO
@@ -98,32 +117,48 @@ function initApp() {
     initializeEventListeners();
     initializeDefaultApps();
     startFirebaseListeners();
+    injetarCssBateria();
   });
 
-  // Se o DOM já carregou (módulo pode rodar depois do DOMContentLoaded)
   if (document.readyState !== "loading") {
     updateUserDisplay();
     initializeEventListeners();
     initializeDefaultApps();
     startFirebaseListeners();
+    injetarCssBateria();
   }
 }
 
+function injetarCssBateria() {
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes batteryPulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+    .battery-fill-low {
+      background: #ef4444 !important;
+      animation: batteryPulse 1s ease-in-out infinite;
+    }
+    .battery-value-low {
+      color: #ef4444 !important;
+      font-weight: 700;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 /* =========================
-   ATUALIZAR DISPLAY DO USUÁRIO
+   DISPLAY DO USUÁRIO
 ========================= */
 function updateUserDisplay() {
   const loggedUserEl = document.getElementById("loggedUserEmail");
   if (!loggedUserEl) return;
 
   if (currentUser && currentUser.type === 'user' && userSession) {
-    // Usuário comum
     loggedUserEl.textContent = userSession.username;
-    if (userSession.sector) {
-      loggedUserEl.title = `Setor: ${userSession.sector}`;
-    }
+    if (userSession.sector) loggedUserEl.title = `Setor: ${userSession.sector}`;
   } else if (currentUser && currentUser.type === 'admin') {
-    // Admin
     loggedUserEl.textContent = "Admin";
   }
 }
@@ -142,6 +177,7 @@ function startFirebaseListeners() {
     });
 
     devices = devicesData;
+    checkBatteryAlerts(devicesData); // ⭐ verifica bateria baixa
     renderDevices();
     updateStats();
     updateDevicesChecklistInModal();
@@ -156,14 +192,12 @@ function startFirebaseListeners() {
 
   onValue(ref(db, "commandLogs"), snap => {
     const newLogs = snap.val() || {};
-
     Object.keys(newLogs).forEach(logId => {
       if (!commandLogs[logId]) {
         unreadLogsCount++;
         updateUnreadBadge();
       }
     });
-
     commandLogs = newLogs;
     renderLogs();
   });
@@ -183,48 +217,13 @@ async function initializeDefaultApps() {
   if (appsSnapshot.exists()) return;
 
   const defaultApps = {
-    home: {
-      id: "home", name: "Menu Principal", icon: "HOME",
-      packageName: "com.oculus.vrshell",
-      launchType: "special", specialAction: "HOME",
-      createdAt: Date.now(), isDefault: true, isSystem: true
-    },
-    beatsaber: {
-      id: "beatsaber", name: "Beat Saber", icon: "BS",
-      packageName: "com.beatgames.beatsaber",
-      launchType: "special", specialAction: "BEAT_SABER",
-      createdAt: Date.now(), isDefault: true
-    },
-    blaston: {
-      id: "blaston", name: "Blaston", icon: "BL",
-      packageName: "com.resolutiongames.ignis",
-      launchType: "special", specialAction: "BLASTON",
-      createdAt: Date.now(), isDefault: true
-    },
-    hyperdash: {
-      id: "hyperdash", name: "Hyper Dash", icon: "HD",
-      packageName: "com.TriangleFactory.HyperDash",
-      launchType: "special", specialAction: "HYPER_DASH",
-      createdAt: Date.now(), isDefault: true
-    },
-    trolin: {
-      id: "trolin", name: "Spatial Ops", icon: "SO",
-      packageName: "com.resolutiongames.trolin",
-      launchType: "special", specialAction: "TROLIN",
-      createdAt: Date.now(), isDefault: true
-    },
-    homeinvasion: {
-      id: "homeinvasion", name: "Home Invasion", icon: "HI",
-      packageName: "com.soulassembly.homeinvasion",
-      launchType: "special", specialAction: "HOME_INVASION",
-      createdAt: Date.now(), isDefault: true
-    },
-    creed: {
-      id: "creed", name: "Creed", icon: "CR",
-      packageName: "com.survios.creed",
-      launchType: "normal",
-      createdAt: Date.now(), isDefault: true
-    }
+    home:        { id: "home",        name: "Menu Principal", icon: "HOME", packageName: "com.oculus.vrshell",             launchType: "special", specialAction: "HOME",         createdAt: Date.now(), isDefault: true, isSystem: true },
+    beatsaber:   { id: "beatsaber",   name: "Beat Saber",     icon: "BS",   packageName: "com.beatgames.beatsaber",         launchType: "special", specialAction: "BEAT_SABER",   createdAt: Date.now(), isDefault: true },
+    blaston:     { id: "blaston",     name: "Blaston",        icon: "BL",   packageName: "com.resolutiongames.ignis",       launchType: "special", specialAction: "BLASTON",       createdAt: Date.now(), isDefault: true },
+    hyperdash:   { id: "hyperdash",   name: "Hyper Dash",     icon: "HD",   packageName: "com.TriangleFactory.HyperDash",  launchType: "special", specialAction: "HYPER_DASH",    createdAt: Date.now(), isDefault: true },
+    trolin:      { id: "trolin",      name: "Spatial Ops",    icon: "SO",   packageName: "com.resolutiongames.trolin",     launchType: "special", specialAction: "TROLIN",        createdAt: Date.now(), isDefault: true },
+    homeinvasion:{ id: "homeinvasion",name: "Home Invasion",  icon: "HI",   packageName: "com.soulassembly.homeinvasion",  launchType: "special", specialAction: "HOME_INVASION", createdAt: Date.now(), isDefault: true },
+    creed:       { id: "creed",       name: "Creed",          icon: "CR",   packageName: "com.survios.creed",              launchType: "normal",                                  createdAt: Date.now(), isDefault: true }
   };
 
   await set(ref(db, "availableApps"), defaultApps);
@@ -234,21 +233,16 @@ async function initializeDefaultApps() {
    EVENT LISTENERS
 ========================= */
 function initializeEventListeners() {
-  // Tabs
   document.querySelectorAll(".tab").forEach(tab => {
     tab.addEventListener("click", () => switchTab(tab.dataset.tab));
   });
 
-  // Auth
   document.getElementById("btnLogout").addEventListener("click", handleLogout);
-
-  // Devices
   document.getElementById("btnExecuteSelected").addEventListener("click", sendCommandToSelected);
   document.getElementById("btnSelectAll").addEventListener("click", selectAllDevices);
   document.getElementById("btnDeselectAll").addEventListener("click", deselectAllDevices);
   document.getElementById("btnToggleApps").addEventListener("click", toggleAppsVisibility);
 
-  // App modal
   document.getElementById("btnAddApp").addEventListener("click", openAddAppModal);
   document.getElementById("btnCloseAppModal").addEventListener("click", closeAppModal);
   document.getElementById("btnCancelAppModal").addEventListener("click", closeAppModal);
@@ -258,36 +252,25 @@ function initializeEventListeners() {
   document.getElementById("appIcon").addEventListener("input", updateAppPreview);
   document.getElementById("appPackage").addEventListener("input", updateAppPreview);
   document.getElementById("appLaunchType").addEventListener("change", toggleSpecialActionField);
-  document.getElementById("appModal").addEventListener("click", e => {
-    if (e.target.id === "appModal") closeAppModal();
-  });
+  document.getElementById("appModal").addEventListener("click", e => { if (e.target.id === "appModal") closeAppModal(); });
 
-  // Group modal
   document.getElementById("btnCreateGroup").addEventListener("click", openCreateGroupModal);
   document.getElementById("btnCloseModal").addEventListener("click", closeGroupModal);
   document.getElementById("btnCancelModal").addEventListener("click", closeGroupModal);
   document.getElementById("btnSaveGroup").addEventListener("click", saveGroup);
   document.getElementById("btnDeleteGroup").addEventListener("click", () => confirmDeleteGroup());
-  document.getElementById("groupModal").addEventListener("click", e => {
-    if (e.target.id === "groupModal") closeGroupModal();
-  });
+  document.getElementById("groupModal").addEventListener("click", e => { if (e.target.id === "groupModal") closeGroupModal(); });
 
-  // Logs
   document.getElementById("btnOpenLogs").addEventListener("click", openLogsModal);
   document.getElementById("btnCloseLogsModal").addEventListener("click", closeLogsModal);
   document.getElementById("btnClearLogs").addEventListener("click", () => confirmClearLogs());
   document.getElementById("logFilterStatus").addEventListener("change", renderLogs);
   document.getElementById("logFilterDevice").addEventListener("change", renderLogs);
-  document.getElementById("logsModal").addEventListener("click", e => {
-    if (e.target.id === "logsModal") closeLogsModal();
-  });
+  document.getElementById("logsModal").addEventListener("click", e => { if (e.target.id === "logsModal") closeLogsModal(); });
 
-  // Confirm modal
   document.getElementById("btnCloseConfirm").addEventListener("click", closeConfirmModal);
   document.getElementById("btnConfirmCancel").addEventListener("click", closeConfirmModal);
-  document.getElementById("confirmModal").addEventListener("click", e => {
-    if (e.target.id === "confirmModal") closeConfirmModal();
-  });
+  document.getElementById("confirmModal").addEventListener("click", e => { if (e.target.id === "confirmModal") closeConfirmModal(); });
 }
 
 /* =========================
@@ -296,10 +279,8 @@ function initializeEventListeners() {
 async function handleLogout() {
   showConfirm("Encerrar Sessão", "Tem certeza que deseja sair do painel?", async () => {
     if (currentUser && currentUser.type === 'admin') {
-      // Logout do Firebase
       await signOut(auth);
     } else {
-      // Logout de usuário comum
       localStorage.removeItem("userSession");
       sessionStorage.removeItem("userSession");
     }
@@ -323,8 +304,15 @@ function switchTab(tabName) {
 function toggleAppsVisibility() {
   appsVisible = !appsVisible;
   const textEl = document.getElementById("toggleAppsText");
-  textEl.textContent = appsVisible ? "Ocultar Apps" : "Mostrar Apps";
+  if (textEl) textEl.textContent = appsVisible ? "Ocultar Apps" : "Mostrar Apps";
   renderDevices();
+}
+
+/* =========================
+   IS ONLINE
+========================= */
+function isOnline(device) {
+  return device.status === "online";
 }
 
 /* =========================
@@ -333,13 +321,9 @@ function toggleAppsVisibility() {
 function renderDevices() {
   const grid = document.getElementById("devicesGrid");
 
-  // Filtrar dispositivos baseado nas permissões do usuário
   let filteredDevices = devices;
-  
   if (currentUser && currentUser.type === 'user' && userSession) {
     const allowedDevices = userSession.allowedDevices || [];
-    
-    // Se o usuário tem lista de dispositivos permitidos, filtrar
     if (allowedDevices.length > 0) {
       filteredDevices = Object.fromEntries(
         Object.entries(devices).filter(([id]) => allowedDevices.includes(id))
@@ -348,10 +332,9 @@ function renderDevices() {
   }
 
   if (Object.keys(filteredDevices).length === 0) {
-    const emptyMessage = currentUser && currentUser.type === 'user' 
+    const emptyMessage = currentUser && currentUser.type === 'user'
       ? "Você não tem dispositivos autorizados"
       : "Nenhum dispositivo conectado";
-    
     grid.innerHTML = `
       <div class="empty-state">
         <svg class="empty-icon" viewBox="0 0 48 48" fill="none">
@@ -369,11 +352,12 @@ function renderDevices() {
   grid.innerHTML = Object.entries(filteredDevices)
     .sort(([, a], [, b]) => (isOnline(b) ? 1 : 0) - (isOnline(a) ? 1 : 0))
     .map(([id, d]) => {
-      const battery    = d.battery ?? 0;
-      const isSelected = selectedDevices.has(id);
-      const online     = isOnline(d);
+      const battery      = d.battery ?? 0;
+      const isSelected   = selectedDevices.has(id);
+      const online       = isOnline(d);
       const currentAppInfo = getCurrentlyPlayingApp(d);
-      const batteryClass = battery <= 20 ? "battery-fill-low" : battery <= 50 ? "battery-fill-mid" : "";
+      const batteryLow   = battery <= BATTERY_ALERT_THRESHOLD;
+      const batteryClass = batteryLow ? "battery-fill-low" : battery <= 50 ? "battery-fill-mid" : "";
 
       return `
         <div class="device-card ${isSelected ? "selected" : ""}" onclick="toggleDevice('${id}')">
@@ -406,7 +390,7 @@ function renderDevices() {
                 <div class="battery-bar">
                   <div class="battery-fill ${batteryClass}" style="width:${battery}%"></div>
                 </div>
-                <span class="info-value">${battery}%</span>
+                <span class="info-value ${batteryLow ? 'battery-value-low' : ''}">${battery}%${batteryLow ? ' ⚠️' : ''}</span>
               </div>
             </div>
             ${d.lastUpdate ? `
@@ -426,12 +410,7 @@ function renderDevices() {
 
 function getCurrentlyPlayingApp(device) {
   if (device.currentAppName) {
-    return {
-      name: device.currentAppName,
-      packageName: device.currentApp,
-      icon: getAppByPackageName(device.currentApp)?.icon || "APP",
-      source: "detected"
-    };
+    return { name: device.currentAppName, packageName: device.currentApp, icon: getAppByPackageName(device.currentApp)?.icon || "APP", source: "detected" };
   }
   if (device.currentApp) {
     const appInfo = getAppInfo(device.currentApp);
@@ -452,8 +431,8 @@ function renderCurrentlyPlaying(appInfo) {
 }
 
 function renderAppButtons(deviceId, online) {
-  const apps = getAllApps();
-  const homeApp  = apps.find(a => a.id === "home");
+  const apps      = getAllApps();
+  const homeApp   = apps.find(a => a.id === "home");
   const otherApps = apps.filter(a => a.id !== "home");
 
   let html = "";
@@ -504,18 +483,11 @@ function deselectAllDevices() {
   showToast("Seleção limpa", "info");
 }
 
-function isOnline(device) {
-  return device.status === "online";
-}
-
 /* =========================
    COMANDOS
 ========================= */
 function sendCommand(deviceId, action) {
-  if (!action) {
-    showToast("Selecione um aplicativo", "error");
-    return;
-  }
+  if (!action) { showToast("Selecione um aplicativo", "error"); return; }
 
   const device = devices[deviceId];
   if (!device || !isOnline(device)) {
@@ -551,14 +523,13 @@ function sendCommandToSelected() {
   if (selectedDevices.size === 0) { showToast("Selecione ao menos um dispositivo", "error"); return; }
 
   let sentCount = 0, offlineCount = 0;
-
   selectedDevices.forEach(id => {
     const device = devices[id];
     if (device && isOnline(device)) { sendCommand(id, app); sentCount++; }
     else offlineCount++;
   });
 
-  if (sentCount > 0) showToast(`Comando enviado para ${sentCount} dispositivo(s)`, "success");
+  if (sentCount > 0)    showToast(`Comando enviado para ${sentCount} dispositivo(s)`, "success");
   if (offlineCount > 0) showToast(`${offlineCount} dispositivo(s) ignorado(s) por estar offline`, "warning");
 }
 
@@ -595,11 +566,8 @@ function getAllApps() {
 
 function populateAppSelects() {
   const selects = ["deviceAppSelect", "groupApp"];
-  const apps = getAllApps().sort((a, b) => a.name.localeCompare(b.name));
-
-  const optionsHTML = apps.map(app =>
-    `<option value="${app.id}">${app.name}</option>`
-  ).join("");
+  const apps    = getAllApps().sort((a, b) => a.name.localeCompare(b.name));
+  const optionsHTML = apps.map(app => `<option value="${app.id}">${app.name}</option>`).join("");
 
   selects.forEach(selectId => {
     const select = document.getElementById(selectId);
@@ -619,17 +587,17 @@ function toggleSpecialActionField() {
 
 function openAddAppModal() {
   currentEditingAppId = null;
-  document.getElementById("appModalTitle").textContent  = "Adicionar Aplicativo";
-  document.getElementById("appName").value              = "";
-  document.getElementById("appIcon").value              = "";
-  document.getElementById("appPackage").value           = "";
-  document.getElementById("appId").value                = "";
-  document.getElementById("appId").disabled             = false;
-  document.getElementById("appLaunchType").value        = "normal";
-  document.getElementById("appSpecialAction").value     = "";
-  document.getElementById("specialActionGroup").style.display = "none";
-  document.getElementById("btnDeleteApp").style.display = "none";
-  document.getElementById("appPreview").style.display   = "none";
+  document.getElementById("appModalTitle").textContent         = "Adicionar Aplicativo";
+  document.getElementById("appName").value                     = "";
+  document.getElementById("appIcon").value                     = "";
+  document.getElementById("appPackage").value                  = "";
+  document.getElementById("appId").value                       = "";
+  document.getElementById("appId").disabled                    = false;
+  document.getElementById("appLaunchType").value               = "normal";
+  document.getElementById("appSpecialAction").value            = "";
+  document.getElementById("specialActionGroup").style.display  = "none";
+  document.getElementById("btnDeleteApp").style.display        = "none";
+  document.getElementById("appPreview").style.display          = "none";
   document.getElementById("appModal").classList.add("active");
 }
 
@@ -638,17 +606,17 @@ function openEditAppModal(appId) {
   const app = availableApps[appId];
   if (!app) return;
 
-  document.getElementById("appModalTitle").textContent  = "Editar Aplicativo";
-  document.getElementById("appName").value              = app.name;
-  document.getElementById("appIcon").value              = app.icon || "";
-  document.getElementById("appPackage").value           = app.packageName;
-  document.getElementById("appId").value                = app.id;
-  document.getElementById("appId").disabled             = true;
-  document.getElementById("appLaunchType").value        = app.launchType || "normal";
-  document.getElementById("appSpecialAction").value     = app.specialAction || "";
-  document.getElementById("specialActionGroup").style.display = app.launchType === "special" ? "block" : "none";
-  document.getElementById("btnDeleteApp").style.display = app.isDefault ? "none" : "block";
-  document.getElementById("appPreview").style.display   = "block";
+  document.getElementById("appModalTitle").textContent         = "Editar Aplicativo";
+  document.getElementById("appName").value                     = app.name;
+  document.getElementById("appIcon").value                     = app.icon || "";
+  document.getElementById("appPackage").value                  = app.packageName;
+  document.getElementById("appId").value                       = app.id;
+  document.getElementById("appId").disabled                    = true;
+  document.getElementById("appLaunchType").value               = app.launchType || "normal";
+  document.getElementById("appSpecialAction").value            = app.specialAction || "";
+  document.getElementById("specialActionGroup").style.display  = app.launchType === "special" ? "block" : "none";
+  document.getElementById("btnDeleteApp").style.display        = app.isDefault ? "none" : "block";
+  document.getElementById("appPreview").style.display          = "block";
   updateAppPreview();
   document.getElementById("appModal").classList.add("active");
 }
@@ -665,11 +633,11 @@ function updateAppPreview() {
   const pkgName = document.getElementById("appPackage").value.trim();
 
   if (name || icon || pkgName) {
-    document.getElementById("appPreview").style.display = "block";
+    document.getElementById("appPreview").style.display       = "block";
     const display = icon || (name ? name.slice(0, 3).toUpperCase() : "APP");
-    document.getElementById("previewIcon").textContent    = display;
-    document.getElementById("previewName").textContent    = name    || "Nome do Aplicativo";
-    document.getElementById("previewPackage").textContent = pkgName || "com.empresa.aplicativo";
+    document.getElementById("previewIcon").textContent        = display;
+    document.getElementById("previewName").textContent        = name    || "Nome do Aplicativo";
+    document.getElementById("previewPackage").textContent     = pkgName || "com.empresa.aplicativo";
   } else {
     document.getElementById("appPreview").style.display = "none";
   }
@@ -694,11 +662,10 @@ function saveApp() {
     id, name,
     icon: icon || name.slice(0, 3).toUpperCase(),
     packageName, launchType,
-    createdAt:  currentEditingAppId ? (availableApps[currentEditingAppId]?.createdAt || Date.now()) : Date.now(),
-    updatedAt:  Date.now(),
-    isDefault:  false
+    createdAt: currentEditingAppId ? (availableApps[currentEditingAppId]?.createdAt || Date.now()) : Date.now(),
+    updatedAt: Date.now(),
+    isDefault: false
   };
-
   if (launchType === "special") appData.specialAction = specialAction;
 
   set(ref(db, `availableApps/${id}`), appData)
@@ -786,9 +753,9 @@ function renderGroups() {
 ========================= */
 function openCreateGroupModal() {
   currentEditingGroupId = null;
-  document.getElementById("modalTitle").textContent    = "Criar Novo Grupo";
-  document.getElementById("groupName").value           = "";
-  document.getElementById("groupApp").value            = "";
+  document.getElementById("modalTitle").textContent       = "Criar Novo Grupo";
+  document.getElementById("groupName").value              = "";
+  document.getElementById("groupApp").value               = "";
   document.getElementById("btnDeleteGroup").style.display = "none";
   updateDevicesChecklistInModal();
   document.getElementById("groupModal").classList.add("active");
@@ -799,9 +766,9 @@ function openEditGroupModal(groupId) {
   const group = groups[groupId];
   if (!group) return;
 
-  document.getElementById("modalTitle").textContent    = "Editar Grupo";
-  document.getElementById("groupName").value           = group.name;
-  document.getElementById("groupApp").value            = group.defaultApp || "";
+  document.getElementById("modalTitle").textContent       = "Editar Grupo";
+  document.getElementById("groupName").value              = group.name;
+  document.getElementById("groupApp").value               = group.defaultApp || "";
   document.getElementById("btnDeleteGroup").style.display = "block";
   updateDevicesChecklistInModal(group.devices || []);
   document.getElementById("groupModal").classList.add("active");
@@ -840,13 +807,13 @@ function updateDevicesChecklistInModal(selectedDeviceIds = []) {
 }
 
 function saveGroup() {
-  const name        = document.getElementById("groupName").value.trim();
-  const defaultApp  = document.getElementById("groupApp").value;
+  const name         = document.getElementById("groupName").value.trim();
+  const defaultApp   = document.getElementById("groupApp").value;
   const selectedList = Array.from(
     document.querySelectorAll("#devicesList input[type='checkbox']:checked")
   ).map(i => i.value);
 
-  if (!name)                  { showToast("Digite um nome para o grupo", "error"); return; }
+  if (!name)                     { showToast("Digite um nome para o grupo", "error"); return; }
   if (selectedList.length === 0) { showToast("Selecione ao menos um dispositivo", "error"); return; }
 
   const groupData = {
@@ -860,8 +827,7 @@ function saveGroup() {
       .then(() => { showToast("Grupo atualizado com sucesso", "success"); closeGroupModal(); })
       .catch(err => showToast(`Erro: ${err.message}`, "error"));
   } else {
-    const newGroupRef = push(ref(db, "groups"));
-    set(newGroupRef, groupData)
+    set(push(ref(db, "groups")), groupData)
       .then(() => { showToast("Grupo criado com sucesso", "success"); closeGroupModal(); })
       .catch(err => showToast(`Erro: ${err.message}`, "error"));
   }
@@ -869,11 +835,9 @@ function saveGroup() {
 
 function confirmDeleteGroup() {
   if (!currentEditingGroupId) return;
-  const groupName = groups[currentEditingGroupId]?.name || "este grupo";
-
   showConfirm(
     "Remover Grupo",
-    `Tem certeza que deseja remover o grupo "${groupName}"? Esta ação não pode ser desfeita.`,
+    `Tem certeza que deseja remover o grupo "${groups[currentEditingGroupId]?.name}"? Esta ação não pode ser desfeita.`,
     () => {
       remove(ref(db, `groups/${currentEditingGroupId}`))
         .then(() => { showToast("Grupo removido", "success"); closeGroupModal(); })
@@ -890,14 +854,12 @@ function executeGroup(groupId) {
     showToast("Grupo inválido ou sem app padrão", "error");
     return;
   }
-
   let sent = 0, offline = 0;
   group.devices.forEach(deviceId => {
     const device = devices[deviceId];
     if (device && isOnline(device)) { sendCommand(deviceId, group.defaultApp); sent++; }
     else offline++;
   });
-
   if (sent > 0)    showToast(`Comando enviado para ${sent} dispositivo(s)`, "success");
   if (offline > 0) showToast(`${offline} dispositivo(s) offline ignorado(s)`, "warning");
 }
@@ -908,7 +870,6 @@ function executeGroup(groupId) {
 function createCommandLog(deviceId, action, status, message, commandId = null) {
   const logId   = commandId || crypto.randomUUID();
   const appInfo = getAppInfo(action);
-
   set(ref(db, `commandLogs/${logId}`), {
     logId, deviceId, action,
     appName: appInfo.name,
@@ -923,19 +884,15 @@ function updateCommandLog(commandId, status, message) {
 }
 
 function confirmClearLogs() {
-  showConfirm(
-    "Limpar Logs",
-    "Tem certeza que deseja apagar todo o histórico de comandos?",
-    () => {
-      remove(ref(db, "commandLogs")).then(() => {
-        commandLogs = {};
-        unreadLogsCount = 0;
-        updateUnreadBadge();
-        renderLogs();
-        showToast("Histórico limpo", "success");
-      });
-    }
-  );
+  showConfirm("Limpar Logs", "Tem certeza que deseja apagar todo o histórico de comandos?", () => {
+    remove(ref(db, "commandLogs")).then(() => {
+      commandLogs = {};
+      unreadLogsCount = 0;
+      updateUnreadBadge();
+      renderLogs();
+      showToast("Histórico limpo", "success");
+    });
+  });
 }
 
 function clearLogs() { confirmClearLogs(); }
@@ -954,10 +911,10 @@ function closeLogsModal() {
 function updateUnreadBadge() {
   const badge = document.getElementById("unreadLogsCount");
   if (unreadLogsCount > 0) {
-    badge.textContent    = unreadLogsCount > 99 ? "99+" : unreadLogsCount;
-    badge.style.display  = "block";
+    badge.textContent   = unreadLogsCount > 99 ? "99+" : unreadLogsCount;
+    badge.style.display = "block";
   } else {
-    badge.style.display  = "none";
+    badge.style.display = "none";
   }
 }
 
@@ -1045,9 +1002,7 @@ document.addEventListener("DOMContentLoaded", () => {
    STATS
 ========================= */
 function updateStats() {
-  // Filtrar dispositivos baseado nas permissões do usuário
   let filteredDevices = devices;
-  
   if (currentUser && currentUser.type === 'user' && userSession) {
     const allowedDevices = userSession.allowedDevices || [];
     if (allowedDevices.length > 0) {
@@ -1056,8 +1011,7 @@ function updateStats() {
       );
     }
   }
-
-  document.getElementById("totalDevices").textContent = Object.keys(filteredDevices).length;
+  document.getElementById("totalDevices").textContent  = Object.keys(filteredDevices).length;
   document.getElementById("onlineDevices").textContent = Object.values(filteredDevices).filter(isOnline).length;
   document.getElementById("totalGroups").textContent   = Object.keys(groups).length;
 }
@@ -1070,16 +1024,11 @@ function formatTime(timestamp) {
   if (diff < 60000)    return "Agora";
   if (diff < 3600000)  return `${Math.floor(diff / 60000)}min atrás`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h atrás`;
-  return new Date(timestamp).toLocaleString("pt-BR", {
-    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
-  });
+  return new Date(timestamp).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 function formatFullTime(timestamp) {
-  return new Date(timestamp).toLocaleString("pt-BR", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit", second: "2-digit"
-  });
+  return new Date(timestamp).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 /* =========================
@@ -1093,12 +1042,10 @@ function showToast(message, type = "info") {
     info:    `<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/><path d="M8 7v5M8 5v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`,
     warning: `<svg viewBox="0 0 16 16" fill="none"><path d="M8 2L15 14H1L8 2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 7v3M8 11v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`
   };
-
   const toast = document.createElement("div");
   toast.className = `toast toast-${type}`;
   toast.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><span class="toast-message">${message}</span>`;
   container.appendChild(toast);
-
   setTimeout(() => {
     toast.style.animation = "toastSlideIn 0.3s ease reverse";
     setTimeout(() => toast.remove(), 300);
@@ -1106,13 +1053,13 @@ function showToast(message, type = "info") {
 }
 
 /* =========================
-   EXPORTS (onclick inline)
+   EXPORTS
 ========================= */
-window.switchTab           = switchTab;
-window.toggleDevice        = toggleDevice;
-window.selectAllDevices    = selectAllDevices;
-window.deselectAllDevices  = deselectAllDevices;
-window.sendCommand         = sendCommand;
+window.switchTab             = switchTab;
+window.toggleDevice          = toggleDevice;
+window.selectAllDevices      = selectAllDevices;
+window.deselectAllDevices    = deselectAllDevices;
+window.sendCommand           = sendCommand;
 window.sendCommandToSelected = sendCommandToSelected;
 window.openCreateGroupModal  = openCreateGroupModal;
 window.openEditGroupModal    = openEditGroupModal;
