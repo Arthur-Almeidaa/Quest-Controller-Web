@@ -64,7 +64,7 @@ let appsVisible     = true;
 let batteryAlerted  = new Set(); // controla quais devices já tocaram o alerta
 
 const COMMAND_TIMEOUT       = 10000;
-const BATTERY_ALERT_THRESHOLD = 83;
+const BATTERY_ALERT_THRESHOLD = 88;
 
 /* =========================
    ALERTA SONORO DE BATERIA
